@@ -7,16 +7,49 @@ import re
 def fetch_text_from_url(url):
     """Fetch and extract text content from a URL."""
     try:
-        response = requests.get(url)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        }
+        
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
+        
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # This is a basic extraction - we'll need to customize this based on the specific website structure
-        # For congress.gov, we'll need to identify the specific divs/classes containing the bill text
-        text_content = soup.get_text()
-        return text_content
-    except Exception as e:
+        # For congress.gov, we need to find the specific div containing the bill/amendment text
+        if 'congress.gov' in url:
+            if 'amendment' in url:
+                # Look for amendment text
+                text_div = soup.find('div', {'class': 'amendment-text'})
+            else:
+                # Look for bill text
+                text_div = soup.find('div', {'class': 'bill-text'})
+            
+            if text_div:
+                # Clean up the text
+                text_content = text_div.get_text(separator='\n', strip=True)
+                # Remove extra whitespace
+                text_content = re.sub(r'\n\s*\n', '\n\n', text_content)
+                return text_content
+            else:
+                st.warning("Could not find the specific text content on the page. The page structure might have changed.")
+                return None
+        else:
+            # For other websites, return all text
+            return soup.get_text()
+            
+    except requests.exceptions.HTTPError as e:
+        st.error(f"HTTP Error: {str(e)}")
+        return None
+    except requests.exceptions.RequestException as e:
         st.error(f"Error fetching content: {str(e)}")
+        return None
+    except Exception as e:
+        st.error(f"Unexpected error: {str(e)}")
         return None
 
 def compare_texts(original_text, amendment_text):
