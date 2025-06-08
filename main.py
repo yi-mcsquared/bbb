@@ -56,35 +56,40 @@ def fetch_text_from_url(url):
             is_amendment = 'amendment' in url
             chamber = 'senate' if 'senate' in url else 'house'
             
-            # Construct API URL
+            # Construct API URL with proper format
             if is_amendment:
+                # For amendments, we need to get the text URL first
                 api_url = f"https://api.congress.gov/v3/amendment/{congress}/{chamber}/{number}?api_key={api_key}"
+                response = requests.get(api_url, headers={'Accept': 'application/json'})
+                response.raise_for_status()
+                data = response.json()
+                
+                # Get the text URL from the response
+                if 'amendment' in data and 'textVersions' in data['amendment']:
+                    latest_version = data['amendment']['textVersions'][0]
+                    if 'formats' in latest_version:
+                        for format_data in latest_version['formats']:
+                            if format_data['type'] == 'Formatted Text':
+                                # Fetch the actual text content
+                                text_response = requests.get(format_data['url'], headers={'Accept': 'text/html'})
+                                text_response.raise_for_status()
+                                return text_response.text
             else:
+                # For bills, get the latest text version
                 api_url = f"https://api.congress.gov/v3/bill/{congress}/{chamber}/{number}/text?api_key={api_key}"
-
-            headers = {
-                'Accept': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-
-            response = requests.get(api_url, headers=headers)
-            response.raise_for_status()
-            
-            data = response.json()
-            
-            # Extract text based on response structure
-            if is_amendment:
-                # For amendments, we need to handle the specific structure
-                if 'amendment' in data and 'text' in data['amendment']:
-                    return data['amendment']['text']
-            else:
-                # For bills, we need to handle the specific structure
+                response = requests.get(api_url, headers={'Accept': 'application/json'})
+                response.raise_for_status()
+                data = response.json()
+                
                 if 'textVersions' in data and len(data['textVersions']) > 0:
                     latest_version = data['textVersions'][0]
                     if 'formats' in latest_version:
                         for format_data in latest_version['formats']:
                             if format_data['type'] == 'Formatted Text':
-                                return format_data['url']
+                                # Fetch the actual text content
+                                text_response = requests.get(format_data['url'], headers={'Accept': 'text/html'})
+                                text_response.raise_for_status()
+                                return text_response.text
 
             st.warning("Could not find text content in the API response")
             return None
