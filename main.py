@@ -5,6 +5,26 @@ import difflib
 import re
 import json
 
+def get_api_key():
+    """Get the API key from Streamlit secrets or environment variable."""
+    try:
+        return st.secrets["CONGRESS_API_KEY"]
+    except:
+        st.error("""
+        API key not found. Please add your congress.gov API key to Streamlit secrets:
+        1. Go to https://share.streamlit.io/
+        2. Select your app
+        3. Click 'Manage app'
+        4. Go to 'Secrets'
+        5. Add the following:
+        ```toml
+        CONGRESS_API_KEY = "your-api-key-here"
+        ```
+        6. Click 'Save'
+        7. Click 'Reboot app'
+        """)
+        return None
+
 def extract_congress_info(url):
     """Extract congress number and bill/amendment ID from URL."""
     # Example URL patterns:
@@ -27,12 +47,14 @@ def fetch_text_from_url(url):
                 st.error("Invalid congress.gov URL format")
                 return None
 
+            # Get API key
+            api_key = get_api_key()
+            if not api_key:
+                return None
+
             # Determine if it's a bill or amendment
             is_amendment = 'amendment' in url
             chamber = 'senate' if 'senate' in url else 'house'
-            
-            # Get API key from secrets
-            api_key = st.secrets["CONGRESS_API_KEY"]
             
             # Construct API URL
             if is_amendment:
