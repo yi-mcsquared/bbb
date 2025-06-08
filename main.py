@@ -137,32 +137,33 @@ def main():
     
     st.markdown("""
     This tool compares legislative amendments with their original bills.
+    
+    **Instructions:**
+    1. Copy and paste the original bill text in the first text area
+    2. Copy and paste the amendment text in the second text area
+    3. Click 'Compare' to see the differences
     """)
     
-    # Input fields for URLs
-    amendment_url = st.text_input("Enter the amendment URL:", 
-                                 placeholder="https://www.congress.gov/amendment/...")
-    bill_url = st.text_input("Enter the original bill URL:", 
-                            placeholder="https://www.congress.gov/bill/...")
+    # Input fields for text
+    original_text = st.text_area("Original Bill Text:", 
+                                height=300,
+                                placeholder="Paste the original bill text here...")
+    
+    amendment_text = st.text_area("Amendment Text:", 
+                                 height=300,
+                                 placeholder="Paste the amendment text here...")
     
     if st.button("Compare"):
-        if amendment_url and bill_url:
-            with st.spinner("Fetching and comparing texts..."):
-                # Fetch texts
-                amendment_text = fetch_text_from_url(amendment_url)
-                bill_text = fetch_text_from_url(bill_url)
+        if original_text and amendment_text:
+            with st.spinner("Comparing texts..."):
+                # Compare texts
+                differences = compare_texts(original_text, amendment_text)
                 
-                if amendment_text and bill_text:
-                    # Compare texts
-                    differences = compare_texts(bill_text, amendment_text)
-                    
-                    # Display results
-                    st.subheader("Comparison Results")
-                    st.text_area("Differences:", differences, height=400)
-                else:
-                    st.error("Could not fetch one or both texts. Please check the URLs.")
+                # Display results
+                st.subheader("Comparison Results")
+                st.text_area("Differences:", differences, height=400)
         else:
-            st.warning("Please provide both URLs to compare.")
+            st.warning("Please provide both texts to compare.")
 
 if __name__ == "__main__":
     main()
