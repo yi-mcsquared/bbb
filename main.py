@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 import difflib
 import re
 import json
+from typing import List, Dict, Tuple
 
 def get_api_key():
     """Get the API key from Streamlit secrets or environment variable."""
@@ -202,20 +203,232 @@ def compare_texts(original_text, amendment_text):
     
     return html_output
 
+class AmendmentAnalyzer:
+    def __init__(self):
+        self.section_pattern = re.compile(r'(?:SEC\.|SECTION)\s+\d+\.', re.IGNORECASE)
+        self.subsection_pattern = re.compile(r'\([a-z0-9]\)', re.IGNORECASE)
+        
+    def extract_sections(self, text: str) -> List[Dict]:
+        """Extract sections and their content from the text."""
+        sections = []
+        current_section = None
+        current_content = []
+        
+        for line in text.split('\n'):
+            if self.section_pattern.search(line):
+                if current_section is not None:
+                    sections.append({
+                        'title': current_section,
+                        'content': '\n'.join(current_content),
+                        'subsections': self.extract_subsections('\n'.join(current_content))
+                    })
+                current_section = line.strip()
+                current_content = []
+            else:
+                current_content.append(line)
+        
+        if current_section is not None:
+            sections.append({
+                'title': current_section,
+                'content': '\n'.join(current_content),
+                'subsections': self.extract_subsections('\n'.join(current_content))
+            })
+        
+        return sections
+    
+    def extract_subsections(self, text: str) -> List[Dict]:
+        """Extract subsections from section content."""
+        subsections = []
+        current_subsection = None
+        current_content = []
+        
+        for line in text.split('\n'):
+            if self.subsection_pattern.search(line):
+                if current_subsection is not None:
+                    subsections.append({
+                        'title': current_subsection,
+                        'content': '\n'.join(current_content)
+                    })
+                current_subsection = line.strip()
+                current_content = []
+            else:
+                current_content.append(line)
+        
+        if current_subsection is not None:
+            subsections.append({
+                'title': current_subsection,
+                'content': '\n'.join(current_content)
+            })
+        
+        return subsections
+    
+    def analyze_changes(self, original_text: str, amendment_text: str) -> Dict:
+        """Analyze changes between original and amendment texts."""
+        original_sections = self.extract_sections(original_text)
+        amendment_sections = self.extract_sections(amendment_text)
+        
+        changes = {
+            'added_sections': [],
+            'removed_sections': [],
+            'modified_sections': []
+        }
+        
+        # Create a map of section titles to their content
+        original_map = {s['title']: s for s in original_sections}
+        amendment_map = {s['title']: s for s in amendment_sections}
+        
+        # Find added and removed sections
+        for section in amendment_sections:
+            if section['title'] not in original_map:
+                changes['added_sections'].append(section)
+        
+        for section in original_sections:
+            if section['title'] not in amendment_map:
+                changes['removed_sections'].append(section)
+        
+        # Analyze modified sections
+        for section in original_sections:
+            if section['title'] in amendment_map:
+                amendment_section = amendment_map[section['title']]
+                section_changes = self.analyze_section_changes(section, amendment_section)
+                if section_changes:
+                    changes['modified_sections'].append(section_changes)
+        
+        return changes
+    
+    def analyze_section_changes(self, original: Dict, amendment: Dict) -> Dict:
+        """Analyze changes within a section."""
+        changes = {
+            'title': original['title'],
+            'added_subsections': [],
+            'removed_subsections': [],
+            'modified_subsections': []
+        }
+        
+        # Create maps of subsection titles to their content
+        original_map = {s['title']: s for s in original['subsections']}
+        amendment_map = {s['title']: s for s in amendment['subsections']}
+        
+        # Find added and removed subsections
+        for subsection in amendment['subsections']:
+            if subsection['title'] not in original_map:
+                changes['added_subsections'].append(subsection)
+        
+        for subsection in original['subsections']:
+            if subsection['title'] not in amendment_map:
+                changes['removed_subsections'].append(subsection)
+        
+        # Analyze modified subsections
+        for subsection in original['subsections']:
+            if subsection['title'] in amendment_map:
+                amendment_subsection = amendment_map[subsection['title']]
+                if subsection['content'] != amendment_subsection['content']:
+                    changes['modified_subsections'].append({
+                        'title': subsection['title'],
+                        'original': subsection['content'],
+                        'amendment': amendment_subsection['content']
+                    })
+        
+        return changes
+
+def format_changes(changes: Dict) -> str:
+    """Format the changes in a readable way."""
+    html_output = """
+    <style>
+        .change-container {
+            margin-bottom: 30px;
+        }
+        .section-title {
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 10px 0;
+        }
+        .subsection-title {
+            color: #34495e;
+            margin: 5px 0;
+        }
+        .added {
+            color: #27ae60;
+            background-color: #e6ffe6;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        .removed {
+            color: #c0392b;
+            background-color: #ffe6e6;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        .modified {
+            color: #2980b9;
+            background-color: #e6f3ff;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+    </style>
+    """
+    
+    # Added sections
+    if changes['added_sections']:
+        html_output += '<div class="change-container">'
+        html_output += '<h3>New Sections Added</h3>'
+        for section in changes['added_sections']:
+            html_output += f'<div class="section-title">{section["title"]}</div>'
+            html_output += f'<div class="added">{section["content"]}</div>'
+        html_output += '</div>'
+    
+    # Removed sections
+    if changes['removed_sections']:
+        html_output += '<div class="change-container">'
+        html_output += '<h3>Sections Removed</h3>'
+        for section in changes['removed_sections']:
+            html_output += f'<div class="section-title">{section["title"]}</div>'
+            html_output += f'<div class="removed">{section["content"]}</div>'
+        html_output += '</div>'
+    
+    # Modified sections
+    if changes['modified_sections']:
+        html_output += '<div class="change-container">'
+        html_output += '<h3>Modified Sections</h3>'
+        for section in changes['modified_sections']:
+            html_output += f'<div class="section-title">{section["title"]}</div>'
+            
+            # Added subsections
+            if section['added_subsections']:
+                html_output += '<div class="subsection-title">New Subsections:</div>'
+                for subsection in section['added_subsections']:
+                    html_output += f'<div class="added">{subsection["title"]}: {subsection["content"]}</div>'
+            
+            # Removed subsections
+            if section['removed_subsections']:
+                html_output += '<div class="subsection-title">Removed Subsections:</div>'
+                for subsection in section['removed_subsections']:
+                    html_output += f'<div class="removed">{subsection["title"]}: {subsection["content"]}</div>'
+            
+            # Modified subsections
+            if section['modified_subsections']:
+                html_output += '<div class="subsection-title">Modified Subsections:</div>'
+                for subsection in section['modified_subsections']:
+                    html_output += f'<div class="modified">{subsection["title"]}</div>'
+                    html_output += f'<div class="removed">Original: {subsection["original"]}</div>'
+                    html_output += f'<div class="added">Amendment: {subsection["amendment"]}</div>'
+    
+    return html_output
+
 def main():
-    st.title("Legislative Amendment Comparison Tool")
+    st.title("Legislative Amendment Analysis Tool")
     
     st.markdown("""
-    This tool compares legislative amendments with their original bills.
+    This tool analyzes legislative amendments to identify:
+    - New sections added
+    - Sections removed
+    - Modifications to existing sections
+    - Changes to subsections
     
     **Instructions:**
     1. Copy and paste the original bill text in the first text area
     2. Copy and paste the amendment text in the second text area
-    3. Click 'Compare' to see the differences
-    
-    The comparison will show:
-    - 🟢 Green: Added text in the amendment
-    - 🔴 Red: Removed text from the original
+    3. Click 'Analyze' to see the changes
     """)
     
     # Input fields for text
@@ -227,17 +440,18 @@ def main():
                                  height=300,
                                  placeholder="Paste the amendment text here...")
     
-    if st.button("Compare"):
+    if st.button("Analyze Changes"):
         if original_text and amendment_text:
-            with st.spinner("Comparing texts..."):
-                # Compare texts
-                differences = compare_texts(original_text, amendment_text)
+            with st.spinner("Analyzing changes..."):
+                analyzer = AmendmentAnalyzer()
+                changes = analyzer.analyze_changes(original_text, amendment_text)
+                formatted_changes = format_changes(changes)
                 
                 # Display results
-                st.subheader("Comparison Results")
-                st.markdown(differences, unsafe_allow_html=True)
+                st.subheader("Analysis Results")
+                st.markdown(formatted_changes, unsafe_allow_html=True)
         else:
-            st.warning("Please provide both texts to compare.")
+            st.warning("Please provide both texts to analyze.")
 
 if __name__ == "__main__":
     main()
