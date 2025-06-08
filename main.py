@@ -31,11 +31,14 @@ def fetch_text_from_url(url):
             is_amendment = 'amendment' in url
             chamber = 'senate' if 'senate' in url else 'house'
             
+            # Get API key from secrets
+            api_key = st.secrets["CONGRESS_API_KEY"]
+            
             # Construct API URL
             if is_amendment:
-                api_url = f"https://api.congress.gov/v3/amendment/{congress}/{chamber}/{number}?api_key=demo"
+                api_url = f"https://api.congress.gov/v3/amendment/{congress}/{chamber}/{number}?api_key={api_key}"
             else:
-                api_url = f"https://api.congress.gov/v3/bill/{congress}/{chamber}/{number}/text?api_key=demo"
+                api_url = f"https://api.congress.gov/v3/bill/{congress}/{chamber}/{number}/text?api_key={api_key}"
 
             headers = {
                 'Accept': 'application/json',
@@ -107,10 +110,6 @@ def main():
     
     st.markdown("""
     This tool compares legislative amendments with their original bills.
-    
-    **Note:** Currently using the demo API key. For production use, you'll need to:
-    1. Register for a congress.gov API key at https://api.congress.gov/sign-up/
-    2. Replace 'demo' in the code with your API key
     """)
     
     # Input fields for URLs
