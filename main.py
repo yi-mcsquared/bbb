@@ -119,18 +119,88 @@ def fetch_text_from_url(url):
         st.error(f"Unexpected error: {str(e)}")
         return None
 
+def format_diff_line(line):
+    """Format a diff line with appropriate styling."""
+    if line.startswith('+'):
+        return f'<span style="color: green; background-color: #e6ffe6;">{line}</span>'
+    elif line.startswith('-'):
+        return f'<span style="color: red; background-color: #ffe6e6;">{line}</span>'
+    elif line.startswith('@'):
+        return f'<span style="color: blue; font-weight: bold;">{line}</span>'
+    return line
+
 def compare_texts(original_text, amendment_text):
-    """Compare two texts and return the differences."""
+    """Compare two texts and return formatted differences."""
     if not original_text or not amendment_text:
         return "One or both texts are empty"
-        
-    # Basic text comparison using difflib
-    diff = difflib.unified_diff(
-        original_text.splitlines(),
-        amendment_text.splitlines(),
-        lineterm=''
-    )
-    return '\n'.join(diff)
+    
+    # Split texts into sections
+    original_sections = re.split(r'\n\s*\n', original_text)
+    amendment_sections = re.split(r'\n\s*\n', amendment_text)
+    
+    # Create HTML for side-by-side comparison
+    html_output = """
+    <style>
+        .comparison-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .text-column {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .section-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .diff-line {
+            margin: 2px 0;
+            padding: 2px 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+    """
+    
+    # Compare each section
+    for i, (orig_section, amend_section) in enumerate(zip(original_sections, amendment_sections)):
+        if orig_section.strip() and amend_section.strip():
+            html_output += f'<div class="comparison-container">'
+            
+            # Original text column
+            html_output += '<div class="text-column">'
+            html_output += f'<div class="section-title">Original Text (Section {i+1})</div>'
+            diff = difflib.unified_diff(
+                orig_section.splitlines(),
+                amend_section.splitlines(),
+                lineterm=''
+            )
+            for line in diff:
+                if line.startswith('-'):
+                    html_output += f'<div class="diff-line">{format_diff_line(line)}</div>'
+            html_output += '</div>'
+            
+            # Amendment text column
+            html_output += '<div class="text-column">'
+            html_output += f'<div class="section-title">Amendment Text (Section {i+1})</div>'
+            diff = difflib.unified_diff(
+                orig_section.splitlines(),
+                amend_section.splitlines(),
+                lineterm=''
+            )
+            for line in diff:
+                if line.startswith('+'):
+                    html_output += f'<div class="diff-line">{format_diff_line(line)}</div>'
+            html_output += '</div>'
+            
+            html_output += '</div>'
+    
+    return html_output
 
 def main():
     st.title("Legislative Amendment Comparison Tool")
@@ -142,6 +212,10 @@ def main():
     1. Copy and paste the original bill text in the first text area
     2. Copy and paste the amendment text in the second text area
     3. Click 'Compare' to see the differences
+    
+    The comparison will show:
+    - 🟢 Green: Added text in the amendment
+    - 🔴 Red: Removed text from the original
     """)
     
     # Input fields for text
@@ -161,7 +235,7 @@ def main():
                 
                 # Display results
                 st.subheader("Comparison Results")
-                st.text_area("Differences:", differences, height=400)
+                st.markdown(differences, unsafe_allow_html=True)
         else:
             st.warning("Please provide both texts to compare.")
 
